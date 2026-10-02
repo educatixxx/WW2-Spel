@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="nl" class="h-full bg-slate-950">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stopping Axis Expansion - Geallieerd Opperbevel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        allied: { gold: '#f59e0b', blue: '#3b82f6', red: '#ef4444', emerald: '#10b981', dark: '#0f172a' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap');
+
+        body { font-family: 'Inter', sans-serif; }
+        .font-mono-military { font-family: 'JetBrains Mono', monospace; }
+
+        /* Realistische Map Styling (D3) */
+        .map-region {
+            fill: #1e293b;
+            transition: all 0.3s ease;
+        }
+        
+        .map-region-neutral {
+            fill: #0f172a;
+            pointer-events: none;
+        }
+
+        .clickable-ocean {
+            fill: #020617;
+            cursor: pointer;
+        }
+        .clickable-ocean:hover {
+            fill: #0f172a;
+        }
+
+        .map-region:hover {
+            fill: #334155 !important;
+            stroke: #94a3b8 !important;
+            stroke-width: 1.5px !important;
+            cursor: pointer;
+        }
+
+        /* Actieve "Brandhaard" (Hotspot) op de kaart */
+        .map-region.hotspot {
+            stroke: #ef4444 !important;
+            stroke-width: 2px !important;
+            animation: pulse-hotspot 2s infinite;
+        }
+
+        @keyframes pulse-hotspot {
+            0% { fill: #1e293b; filter: drop-shadow(0 0 0px rgba(239, 68, 68, 0)); }
+            50% { fill: #451a1a; filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.6)); }
+            100% { fill: #1e293b; filter: drop-shadow(0 0 0px rgba(239, 68, 68, 0)); }
+        }
+
+        /* Selecteerbare doelen voor beslissingen */
+        .map-region.active-target {
+            stroke: #3b82f6 !important;
+            stroke-width: 2px !important;
+            animation: pulse-target 1.8s infinite;
+        }
+
+        @keyframes pulse-target {
+            0% { fill: #1e293b; }
+            50% { fill: #1e3a8a; }
+            100% { fill: #1e293b; }
+        }
+
+        /* Typewriter text color styling based on message type */
+        .msg-intel { color: #cbd5e1; }
+        .msg-dossier { color: #60a5fa; border-left: 2px solid #3b82f6; padding-left: 10px; margin: 10px 0; background: rgba(59, 130, 246, 0.05); }
+        .msg-alert { color: #f87171; font-weight: bold; }
+        .msg-success { color: #34d399; }
+        .msg-history { color: #fbbf24; border-left: 2px solid #f59e0b; padding-left: 10px; margin-top: 10px; }
+
+        /* Kaart raster en lijnen */
+        .grid-line { stroke: rgba(51, 65, 85, 0.5); stroke-width: 1; stroke-dasharray: 4 4; pointer-events: none;}
+    </style>
+</head>
+<body class="h-full text-slate-100 flex flex-col justify-between overflow-hidden">
+
+    <header class="bg-slate-900/90 border-b border-slate-800 p-4 backdrop-blur-md shadow-lg z-20 flex-shrink-0">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+            
+            <div class="flex items-center gap-3">
+                <div class="bg-amber-500/10 border border-amber-500/30 p-2 rounded-lg text-amber-400">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-xs uppercase tracking-wider text-slate-400 font-semibold">Geallieerd Opperbevel</h1>
+                    <div class="text-xl font-bold text-white flex items-center gap-2">
+                        <span>JAAR:</span>
+                        <span id="year-display" class="text-amber-400 font-mono-military text-2xl">1938</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Balansmeters -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 w-full md:w-2/3">
+                <!-- Cohesie Meter -->
+                <div class="bg-slate-800/80 border border-slate-700/60 p-2.5 rounded-xl shadow-inner relative group cursor-help">
+                    <div class="absolute -top-10 left-0 bg-slate-950 border border-slate-700 text-xs p-2 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none w-64 z-50">
+                        Vertrouwen tussen de Westerse geallieerden en de Sovjet-Unie (Stalin). Bij 0% sluit Stalin een losse vrede.
+                    </div>
+                    <div class="flex justify-between items-center text-xs font-semibold mb-1.5">
+                        <span class="text-blue-400 flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full bg-blue-400 inline-block"></span>
+                            Cohesie (Oost-West)
+                        </span>
+                        <span id="val-cohesion" class="font-mono-military text-blue-300">50%</span>
+                    </div>
+                    <div class="w-full bg-slate-950 rounded-full h-2.5 overflow-hidden border border-slate-800">
+                        <div id="meter-cohesion" class="bg-gradient-to-r from-blue-600 to-indigo-500 h-full transition-all duration-500" style="width: 50%;"></div>
+                    </div>
+                </div>
+
+                <!-- Logistiek Meter -->
+                <div class="bg-slate-800/80 border border-slate-700/60 p-2.5 rounded-xl shadow-inner relative group cursor-help">
+                    <div class="absolute -top-10 left-0 bg-slate-950 border border-slate-700 text-xs p-2 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none w-64 z-50">
+                        Militair materieel, productie en aanvoerlijnen. Bij 0% verliest u het front door tekorten.
+                    </div>
+                    <div class="flex justify-between items-center text-xs font-semibold mb-1.5">
+                        <span class="text-amber-400 flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full bg-amber-400 inline-block"></span>
+                            Logistiek & Productie
+                        </span>
+                        <span id="val-logistics" class="font-mono-military text-amber-300">50%</span>
+                    </div>
+                    <div class="w-full bg-slate-950 rounded-full h-2.5 overflow-hidden border border-slate-800">
+                        <div id="meter-logistics" class="bg-gradient-to-r from-amber-600 to-emerald-500 h-full transition-all duration-500" style="width: 50%;"></div>
+                    </div>
+                </div>
+
+                <!-- Thuisfront Moraal Meter -->
+                <div class="bg-slate-800/80 border border-slate-700/60 p-2.5 rounded-xl shadow-inner relative group cursor-help">
+                    <div class="absolute -top-10 right-0 bg-slate-950 border border-slate-700 text-xs p-2 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none w-64 z-50">
+                        De wil van de bevolking om de oorlog vol te houden. Bij 0% forceren stakingen een wapenstilstand.
+                    </div>
+                    <div class="flex justify-between items-center text-xs font-semibold mb-1.5">
+                        <span class="text-rose-400 flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full bg-rose-400 inline-block"></span>
+                            Thuisfront Moraal
+                        </span>
+                        <span id="val-morale" class="font-mono-military text-rose-300">50%</span>
+                    </div>
+                    <div class="w-full bg-slate-950 rounded-full h-2.5 overflow-hidden border border-slate-800">
+                        <div id="meter-morale" class="bg-gradient-to-r from-rose-600 to-pink-500 h-full transition-all duration-500" style="width: 50%;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 flex flex-col lg:flex-row gap-6 overflow-hidden">
+        
+        <!-- Left Column: Realistic Interactive Map -->
+        <section class="lg:w-5/12 bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-col shadow-xl relative overflow-hidden flex-shrink-0 min-h-[300px] lg:min-h-0">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Europa Theater (Topografisch)
+                </span>
+                <span id="map-status" class="text-xs font-mono-military text-slate-500">STANDBY</span>
+            </div>
+
+            <!-- Authentic WWII stylized Map with realistic borders via D3 -->
+            <div class="relative flex-1 flex items-center justify-center my-2 bg-slate-950/60 rounded-xl border border-slate-800/80 overflow-hidden">
+                
+                <!-- D3 injecteert de SVG hier -->
+                <div id="d3-map-root" class="w-full h-full absolute inset-0">
+                    <div class="flex items-center justify-center h-full text-slate-500 font-mono-military animate-pulse text-sm" id="map-loading">Satelliet/Topografische grenzen inladen...</div>
+                </div>
+
+                <div id="map-banner" class="absolute bottom-4 left-4 right-4 bg-slate-900/90 border border-amber-500/50 text-amber-400 p-3 rounded-xl font-bold text-sm text-center shadow-[0_0_15px_rgba(245,158,11,0.2)] transition-all transform translate-y-16 opacity-0 pointer-events-none backdrop-blur-sm z-10">
+                    Selecteer een regio op de kaart...
+                </div>
+            </div>
+            
+            <div id="map-instruction-text" class="text-xs text-slate-400 mt-2 text-center h-4">
+                Wacht op instructies van de inlichtingendienst.
+            </div>
+        </section>
+
+        <!-- Right Column: Command Terminal -->
+        <section class="lg:w-7/12 bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col shadow-xl overflow-hidden relative">
+            
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-3 flex-shrink-0">
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-rose-500 inline-block animate-pulse"></span>
+                    <span class="text-xs font-mono-military text-slate-400 ml-2">ENIGMA / DOSSIER TELEGRAAF</span>
+                </div>
+                <button id="btn-skip-typing" class="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-1 rounded text-slate-300 transition hidden">
+                    Direct Tonen ⏭
+                </button>
+            </div>
+
+            <!-- Terminal Output Area -->
+            <div id="terminal-content" class="flex-1 overflow-y-auto space-y-3 pr-2 text-sm leading-relaxed font-mono-military pb-4">
+                <!-- Tekst wordt hier dynamisch geïnjecteerd -->
+            </div>
+
+            <!-- Interactie Controle Paneel (Invoer, Knoppen) -->
+            <div class="mt-2 pt-3 border-t border-slate-800/80 bg-slate-900 z-10 flex-shrink-0">
+                
+                <!-- Typing Input Area -->
+                <div id="input-area" class="hidden space-y-3">
+                    <label id="input-prompt-label" for="command-input" class="block text-xs font-bold text-amber-400 uppercase tracking-wider">
+                        BEVESTIG BEVELCODE:
+                    </label>
+                    <div class="flex flex-col sm:flex-row gap-2">
+                        <input type="text" id="command-input" class="flex-1 bg-slate-950 border border-slate-600 focus:border-amber-400 text-amber-300 placeholder-slate-600 font-mono-military text-base rounded-lg px-4 py-3 outline-none transition shadow-inner uppercase" placeholder="Typ code..." autocomplete="off" spellcheck="false"/>
+                        <button id="btn-submit-code" class="bg-amber-600 hover:bg-amber-500 text-white font-bold px-6 py-3 rounded-lg transition flex items-center justify-center gap-2">
+                            <span>VERSTUUR</span>
+                        </button>
+                    </div>
+                    <div id="quick-chips-container" class="flex flex-wrap items-center gap-2 pt-1">
+                        <span class="text-xs text-slate-500">Ontcijferde codes:</span>
+                    </div>
+                </div>
+
+                <!-- Keuze Knoppen -->
+                <div id="choice-area" class="hidden flex flex-col gap-2"></div>
+
+                <!-- Algemene Verder Knop -->
+                <button id="btn-continue" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-5 rounded-lg transition shadow-md flex items-center justify-center gap-2 hidden">
+                    <span id="btn-continue-text">BEGRIJPEN & VERDER</span>
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
+                </button>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        const terminalContent = document.getElementById('terminal-content');
+        const inputArea = document.getElementById('input-area');
+        const commandInput = document.getElementById('command-input');
+        const btnSubmitCode = document.getElementById('btn-submit-code');
+        const quickChipsContainer = document.getElementById('quick-chips-container');
+        const choiceArea = document.getElementById('choice-area');
+        const btnContinue = document.getElementById('btn-continue');
+        const btnContinueText = document.getElementById('btn-continue-text');
+        const btnSkipTyping = document.getElementById('btn-skip-typing');
+        const yearDisplay = document.getElementById('year-display');
+        const mapBanner = document.getElementById('map-banner');
+        const mapStatus = document.getElementById('map-status');
+        const mapInstructionText = document.getElementById('map-instruction-text');
+        
+        let regions = []; // Wordt dynamisch gevuld door D3
+
+        let isTyping = false;
+        let currentFullText = "";
+        let currentMsgClass = "";
+        let typeInterval = null;
+        const TYPE_SPEED = 12; // Sneller typen voor betere pacing
+
+        let state = {
+            cohesion: 50, logistics: 50, morale: 50,
+            currentScenario: 0, phase: 'intro'
+        };
+
+        // --- HET EDUCATIEVE CURRICULUM (3 VWO WW2 KENNIS) ---
+        const scenarios = [
+            {
+                year: "1938",
+                title: "DE SUDETENCRISIS",
+                hotspot: "region-germany", // Waar de speler op moet klikken voor het dossier
+                dossier: "[EDUCATIEF DOSSIER: APPEASEMENT]\nHitler eist de uitbreiding van het Duitse Rijk om alle Duitstaligen te verenigen (Heim ins Reich) en leefruimte te creëren (Lebensraum). Hij dreigt met oorlog als hij het Sudetenland (in Tsjecho-Slowakije) niet krijgt.\n\nDe Britse premier Chamberlain wil een gruwelijke oorlog zoals WO1 voorkomen. Hij voert een politiek van 'Appeasement' (verzoening): toegeven aan Hitlers eisen om de vrede te bewaren.",
+                briefing: "De leiders van Groot-Brittannië, Frankrijk, Italië en Duitsland ontmoeten elkaar in München. Tsjecho-Slowakije zelf én de Sovjet-Unie (Stalin) zijn niet uitgenodigd.\n\nStalin kijkt met argusogen toe. Hij vreest dat het Westen Hitler bewust naar het Oosten (richting de USSR) stuurt.",
+                decoding: { prompt: "DECODEER DE ONDERHANDELINGSSTRATEGIE ('MUNCHEN'):", codes: ['MUNCHEN'] },
+                mapInstruction: null, // Voor de keuze is geen kaartklik nodig in dit jaar
+                choices: [
+                    {
+                        text: "A: TEKEN VERDRAG VAN MÜNCHEN (Geef Sudetenland aan Hitler)",
+                        hiddenEffect: { c: -15, l: 15, m: 10 },
+                        debrief: "Je tekent het verdrag. Chamberlain keert terug met de belofte 'Peace for our time'. De oorlog is uitgesteld (Logistiek +, Moraal +).\n\nHISTORISCHE REALITEIT: Dit is wat er echt gebeurde. Het pact was echter een ramp voor de Cohesie. Stalin concludeerde dat hij het Westen niet kon vertrouwen en tekende een jaar later tot ieders shock een niet-aanvalsverdrag met Hitler (Molotov-Ribbentroppact)."
+                    },
+                    {
+                        text: "B: WEIGER EN DREIG MET MILITAIR INGRIJPEN",
+                        hiddenEffect: { c: 15, l: -20, m: -20 },
+                        debrief: "Je weigert. Hitler is woedend. Stalin ziet dat je betrouwbaar bent (Cohesie +). Maar onze legers zijn zwak en de Britse en Franse bevolking raakt in paniek (Moraal -, Logistiek -).\n\nHISTORISCHE REALITEIT: Dit gebeurde NIET. Historici debatteren nog steeds of de geallieerden in 1938 een oorlog met Duitsland hadden kunnen winnen. Door de appeasement-politiek kreeg Duitsland de tijd om enorm sterk te worden."
+                    }
+                ]
+            },
+            {
+                year: "1940",
+                title: "DE VAL VAN FRANKRIJK",
+                hotspot: "region-france",
+                dossier: "[EDUCATIEF DOSSIER: BLITZKRIEG]\nIn mei 1940 valt Duitsland West-Europa aan. Door de tactiek van 'Blitzkrieg' (een snelle samenwerking tussen tanks, vliegtuigen en infanterie) wordt het Franse leger binnen enkele weken compleet verslagen.\n\nGroot-Brittannië (nu onder leiding van Winston Churchill) is van het continent verdreven en staat er helemaal alleen voor tegen het Duitse rijk.",
+                briefing: "Frankrijk is gevallen. Hitler bereidt Operatie Seelöwe voor: de invasie van Engeland. De Luftwaffe begint met enorme bombardementen op Britse steden (De Blitz).\n\nTegelijkertijd proberen Duitse U-boten (onderzeeërs) Groot-Brittannië uit te hongeren door schepen op de Atlantische Oceaan te torpederen. Waar zetten we onze middelen in?",
+                decoding: null,
+                mapInstruction: {
+                    text: "MAP VERPLICHT: Klik op 'Groot-Brittannië' (Luchtmacht) of 'Atlantische Oceaan' (Marine)",
+                    validTargets: ['region-uk', 'region-atlantic']
+                },
+                choices: [
+                    {
+                        targetId: 'region-uk',
+                        text: "BOUW RADARSTATIONS EN SPITFIRES (Slag om Engeland)",
+                        hiddenEffect: { c: 0, l: -10, m: 20 },
+                        debrief: "De Royal Air Force (RAF) verslaat de Luftwaffe mede dankzij de nieuwe radar! Het moraal van de bevolking stijgt enorm. De Atlantische vloot lijdt echter zware verliezen.\n\nHISTORISCHE REALITEIT: Groot-Brittannië won de Slag om Engeland door superieure technologie (radar) en de inzet van piloten. Churchill zei: 'Nooit in de geschiedenis hebben zo velen, zo veel te danken gehad, aan zo weinigen.'"
+                    },
+                    {
+                        targetId: 'region-atlantic',
+                        text: "FOCUS OP KONVOOIBESCHERMING & ANTI-DUIKBOOT",
+                        hiddenEffect: { c: 10, l: 15, m: -15 },
+                        debrief: "De aanvoerlijnen over zee blijven veilig. Logistiek verbetert. Maar door het gebrek aan luchtverdediging worden Britse steden platgebombardeerd (Moraal daalt zwaar).\n\nHISTORISCHE REALITEIT: Hoewel de Slag om de Atlantische Oceaan cruciaal was, kregen de gevechtsvliegtuigen in 1940 historische prioriteit, waardoor een Duitse invasie van land werd voorkomen."
+                    }
+                ]
+            },
+            {
+                year: "1941",
+                title: "OPERATIE BARBAROSSA",
+                hotspot: "region-ussr",
+                dossier: "[EDUCATIEF DOSSIER: LEND-LEASE & HET OOSTFRONT]\nIn juni 1941 verbreekt Hitler het pact met Stalin en valt de Sovjet-Unie binnen (Operatie Barbarossa). De nazi-ideologie ziet de Slavische volkeren als 'Untermenschen'. Het wordt een vernietigingsoorlog.\n\nStalin sluit zich noodgedwongen aan bij de Geallieerden. Amerika is officieel nog neutraal, maar president Roosevelt bedenkt de 'Lend-Lease Act' om wapens te 'lenen' aan landen die vechten tegen nazi-Duitsland.",
+                briefing: "Het Rode Leger lijdt miljoenen verliezen en trekt zich terug in de bittere kou. Stalin eist dat de VS en Groot-Brittannië massaal vrachtwagens, voedsel en staal naar de USSR sturen om ze in de strijd te houden.",
+                decoding: { prompt: "ONTSLEUTEL HET MATERIEEL VERDRAG ('LENDLEASE'):", codes: ['LENDLEASE'] },
+                mapInstruction: null,
+                choices: [
+                    {
+                        text: "STUUR LEND-LEASE MATERIEEL NAAR STALIN",
+                        hiddenEffect: { c: 25, l: -15, m: 0 },
+                        debrief: "Britse en Amerikaanse schepen maken de gevaarlijke tocht naar het noorden. Het wantrouwen van Stalin neemt af (Cohesie stijgt), maar dit kost onze eigen legers wapens.\n\nHISTORISCHE REALITEIT: Dit is precies wat de VS deed. Hoewel de USSR de meeste nazi-soldaten versloeg (met enorm bloedvergieten), gebeurde dit voor een aanzienlijk deel op wielen (vrachtwagens en jeeps) geleverd door de Amerikaanse industrie."
+                    },
+                    {
+                        text: "HOUD VOORRADEN ACHTER VOOR EIGEN LEGEROPBOUW",
+                        hiddenEffect: { c: -30, l: 20, m: 0 },
+                        debrief: "Je weigert hulp. Stalin voelt zich verraden en moet in de winter voor Moskou vechten met gigantische tekorten. Het bondgenootschap balanceert op de rand van de afgrond (Cohesie -30!).\n\nHISTORISCHE REALITEIT: Dit werd niet gekozen. Als Stalin de wapens niet had gekregen, had de USSR mogelijk een aparte vrede met Duitsland gesloten of de oorlog verloren, waardoor Hitler heel Europa zou beheersen."
+                    }
+                ]
+            },
+            {
+                year: "1944",
+                title: "HET TWEEDE FRONT & D-DAY",
+                hotspot: "region-france",
+                dossier: "[EDUCATIEF DOSSIER: OPERATIE OVERLORD]\nStalin heeft jarenlang aangedrongen op een groot 'Tweede Front' in West-Europa om het Duitse leger te splitsen. Na campagnes in Afrika en Italië is het op 6 juni 1944 zover: D-Day.\n\nDit is de grootste amfibische invasie in de geschiedenis. De geallieerden landen op de stranden van Normandië in bezet Frankrijk, onder leiding van de Amerikaanse generaal Eisenhower.",
+                briefing: "We zijn geland in Frankrijk, maar de Duitse tegenstand is hevig en de havens zijn vernietigd. De logistieke aanvoerlijnen staan onder extreme druk.\n\nDe Britse generaal Montgomery komt met een gewaagd alternatief plan: gebruik parachutisten om de bruggen over de rivieren in Nederland te veroveren, zodat we direct Duitsland in kunnen rijden en de oorlog voor kerst eindigt.",
+                decoding: null,
+                mapInstruction: {
+                    text: "MAP VERPLICHT: Klik op 'Duitsland' (Montgomery plan) of 'Frankrijk' (Eisenhower plan)",
+                    validTargets: ['region-germany', 'region-france']
+                },
+                choices: [
+                    {
+                        targetId: 'region-germany',
+                        text: "OPERATIE MARKET GARDEN (Parachutisten op de bruggen)",
+                        hiddenEffect: { c: 0, l: -25, m: 10 },
+                        debrief: "Een waanzinnige poging. Duizenden parachutisten landen in Nederland, maar de laatste brug (bij Arnhem) blijkt een brug te ver. De operatie mislukt en kost enorm veel levens en voorraden (Logistiek -25).\n\nHISTORISCHE REALITEIT: Operatie Market Garden mislukte daadwerkelijk. Hierdoor liep de geallieerde opmars vast en werd de noordelijke helft van Nederland geconfronteerd met de verschrikkelijke Hongerwinter van '44-'45."
+                    },
+                    {
+                        targetId: 'region-france',
+                        text: "HET BREDE FRONT (Gestaag oprukken door Frankrijk)",
+                        hiddenEffect: { c: 5, l: 15, m: 5 },
+                        debrief: "Je wijst Montgomery's plan af en rukt gestaag en logistiek veilig op in de breedte. Het duurt langer, maar is zekerder.\n\nHISTORISCHE REALITEIT: Eisenhower gaf toe aan de politieke druk van Montgomery en voerde Market Garden uit. Als hij de veilige route had gekozen, was het front waarschijnlijk minder snel opgeschoven in september, maar zonder de dramatische verliezen."
+                    }
+                ]
+            },
+            {
+                year: "1945",
+                title: "JALTA EN DE KOUDE OORLOG",
+                hotspot: "region-germany",
+                dossier: "[EDUCATIEF DOSSIER: CONFERENTIE VAN JALTA]\nIn februari 1945 wordt duidelijk dat nazi-Duitsland gaat verliezen. Roosevelt, Churchill en Stalin komen samen in Jalta (Krim).\n\nZe bespreken de toekomst van Europa. Stalin is van plan de Oost-Europese landen die hij bevrijdt (zoals Polen) onder communistische controle te houden als een 'bufferzone'. Het wantrouwen tussen het kapitalistische Westen en de communistische USSR bereikt een kookpunt. Dit is het zaadje voor de Koude Oorlog.",
+                briefing: "Het Duitse leger is gebroken. Zowel de westerse legers als het Rode Leger van Stalin racen naar Berlijn. \n\nWe kunnen doorvechten en vasthouden aan onvoorwaardelijke overgave, of we proberen buiten Stalin om in het geheim vrede te sluiten met restanten van het Duitse opperbevel om Oost-Europa te redden.",
+                decoding: { prompt: "BEVESTIG HET LAATSTE BESLUIT ('BERLIJN' of 'VERRAAD'):", codes: ['BERLIJN', 'VERRAAD'] },
+                mapInstruction: null,
+                choices: [
+                    {
+                        text: "A (Code: BERLIJN): VECHT DOOR VOOR ONVOORWAARDELIJKE OVERGAVE",
+                        hiddenEffect: { c: 10, l: 0, m: 10 },
+                        debrief: "De legers ontmoeten elkaar bij de rivier de Elbe. Hitler pleegt zelfmoord in Berlijn en nazi-Duitsland valt. De alliantie houdt lang genoeg stand om te winnen.\n\nHISTORISCHE REALITEIT: Duitsland capituleerde onvoorwaardelijk in mei 1945. Vlak daarna viel de anti-Hitler alliantie uit elkaar. Europa werd door het IJzeren Gordijn in tweeën gesplitst voor de komende 45 jaar."
+                    },
+                    {
+                        text: "B (Code: VERRAAD): SLUIT GEHEIM VREDESPPACT TEGEN STALIN",
+                        hiddenEffect: { c: -80, l: 10, m: -20 },
+                        debrief: "Je probeert Stalin buiten spel te zetten. De KGB (Russische geheime dienst) ontdekt dit. Stalin verklaart de westerse geallieerden als vijanden. Een Derde Wereldoorlog breekt direct uit op de puinhopen van Europa.\n\nHISTORISCHE REALITEIT: Dit gebeurde niet, hoewel figuren zoals de Britse premier Churchill in het geheim plannen lieten maken ('Operation Unthinkable') om direct na WO2 de USSR aan te vallen. Dit werd als volstrekt onmogelijk beschouwd."
+                    }
+                ]
+            }
+        ];
+
+        async function initGame() {
+            // Wacht eerst op het inladen van de echte wereldkaart
+            await loadRealMap();
+
+            btnSubmitCode.addEventListener('click', checkCodeInput);
+            commandInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') checkCodeInput(); });
+            btnSkipTyping.addEventListener('click', skipTyping);
+
+            updateMeters();
+            startPhase();
+        }
+
+        async function loadRealMap() {
+            const root = document.getElementById('d3-map-root');
+            
+            const svg = d3.select("#d3-map-root")
+                .append("svg")
+                .attr("viewBox", "0 0 800 800")
+                .attr("class", "w-full h-full object-cover");
+
+            // Atlantische Oceaan achtergrond (Klikbaar)
+            svg.append("rect")
+                .attr("width", 800)
+                .attr("height", 800)
+                .attr("class", "clickable-ocean")
+                .attr("data-region", "region-atlantic")
+                .on("click", () => handleMapClick("region-atlantic"));
+
+            // Projectie afgesteld op Europa (ingezoomd)
+            const projection = d3.geoMercator()
+                .center([15, 52])
+                .scale(1000)
+                .translate([400, 400]);
+
+            const path = d3.geoPath().projection(projection);
+
+            try {
+                // Laad echte landgrenzen in via betrouwbare geoJSON map
+                const response = await fetch("https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson");
+                const data = await response.json();
+
+                // Verwijder laadtekst
+                document.getElementById('map-loading').style.display = 'none';
+
+                // Teken alle landen
+                svg.append("g")
+                    .selectAll("path")
+                    .data(data.features)
+                    .join("path")
+                    .attr("d", path)
+                    .attr("class", d => {
+                        const r = getRegionId(d.properties.name);
+                        return r !== "region-neutral" ? "map-region" : "map-region-neutral";
+                    })
+                    .attr("data-region", d => getRegionId(d.properties.name))
+                    .style("stroke", "#334155")
+                    .style("stroke-width", "1")
+                    .on("click", (event, d) => {
+                        const regionId = getRegionId(d.properties.name);
+                        if(regionId !== "region-neutral") handleMapClick(regionId);
+                    });
+                
+                // Voeg tactische militaire labels toe aan de echte kaart
+                const labels = [
+                    { name: "UK", coords: [-2, 53.5], color: "#f8fafc" },
+                    { name: "FRANKRIJK", coords: [2, 47], color: "#f8fafc" },
+                    { name: "DUITSLAND", coords: [10, 51.5], color: "#ef4444" },
+                    { name: "ITALIË", coords: [12.5, 42.5], color: "#f59e0b" },
+                    { name: "USSR", coords: [35, 55], color: "#f8fafc" },
+                    { name: "ATLANTISCHE OCEAAN", coords: [-15, 45], color: "#64748b" }
+                ];
+
+                svg.append("g").selectAll("text")
+                    .data(labels)
+                    .enter()
+                    .append("text")
+                    .attr("x", d => projection(d.coords)[0])
+                    .attr("y", d => projection(d.coords)[1])
+                    .attr("text-anchor", "middle")
+                    .attr("fill", d => d.color)
+                    .attr("font-size", d => d.name === "USSR" ? "24px" : (d.name === "ATLANTISCHE OCEAAN" ? "12px" : "14px"))
+                    .attr("font-weight", "bold")
+                    .style("pointer-events", "none")
+                    .style("opacity", d => d.name === "ATLANTISCHE OCEAAN" ? "0.4" : "0.9")
+                    .attr("class", "font-mono-military tracking-wider")
+                    .text(d => d.name);
+
+                // Zorg dat de algemene interactie logica de nieuwe SVG-paden herkent
+                regions = document.querySelectorAll('.map-region, .clickable-ocean');
+                
+            } catch (error) {
+                console.error("Map error", error);
+                root.innerHTML = '<div class="flex items-center justify-center h-full text-rose-500">Fout bij laden satellietdata. Check internetverbinding.</div>';
+            }
+        }
+
+        // Groepeert echte landen in de benodigde speelbare regio's
+        function getRegionId(countryName) {
+            const map = {
+                "England": "region-uk", "United Kingdom": "region-uk", "Ireland": "region-uk",
+                "France": "region-france", "Belgium": "region-france", "Netherlands": "region-france", "Luxembourg": "region-france",
+                "Germany": "region-germany", "Austria": "region-germany", "Poland": "region-germany", "Czech Republic": "region-germany", "Slovakia": "region-germany", "Hungary": "region-germany", "Romania": "region-germany",
+                "Italy": "region-italy", "Albania": "region-italy", "Greece": "region-italy",
+                "Russia": "region-ussr", "Ukraine": "region-ussr", "Belarus": "region-ussr", "Lithuania": "region-ussr", "Latvia": "region-ussr", "Estonia": "region-ussr", "Moldova": "region-ussr"
+            };
+            return map[countryName] || "region-neutral";
+        }
+
+        function updateMeters() {
+            state.cohesion = Math.max(0, Math.min(100, state.cohesion));
+            state.logistics = Math.max(0, Math.min(100, state.logistics));
+            state.morale = Math.max(0, Math.min(100, state.morale));
+
+            document.getElementById('meter-cohesion').style.width = state.cohesion + '%';
+            document.getElementById('meter-logistics').style.width = state.logistics + '%';
+            document.getElementById('meter-morale').style.width = state.morale + '%';
+
+            document.getElementById('val-cohesion').innerText = state.cohesion + '%';
+            document.getElementById('val-logistics').innerText = state.logistics + '%';
+            document.getElementById('val-morale').innerText = state.morale + '%';
+        }
+
+        function printLine(text, msgClass = "msg-intel", clear = false, callback = null) {
+            if (clear) terminalContent.innerHTML = '';
+            if (typeInterval) clearInterval(typeInterval);
+
+            currentFullText = text;
+            currentMsgClass = msgClass;
+            
+            const p = document.createElement('div');
+            p.className = `whitespace-pre-wrap ${msgClass}`;
+            terminalContent.appendChild(p);
+
+            let index = 0;
+            isTyping = true;
+            btnSkipTyping.classList.remove('hidden');
+
+            typeInterval = setInterval(() => {
+                if (index < text.length) {
+                    p.textContent += text.charAt(index);
+                    index++;
+                    terminalContent.scrollTop = terminalContent.scrollHeight;
+                } else {
+                    finishTyping(callback);
+                }
+            }, TYPE_SPEED);
+        }
+
+        function skipTyping() {
+            if (!isTyping) return;
+            const lastChild = terminalContent.lastElementChild;
+            if (lastChild) lastChild.textContent = currentFullText;
+            finishTyping(null);
+        }
+
+        function finishTyping(callback) {
+            clearInterval(typeInterval);
+            isTyping = false;
+            btnSkipTyping.classList.add('hidden');
+            terminalContent.scrollTop = terminalContent.scrollHeight;
+            if (window.pendingCallback) {
+                let cb = window.pendingCallback;
+                window.pendingCallback = null;
+                cb();
+            } else if (callback) {
+                callback();
+            }
+        }
+
+        // --- THE NEW GAME FLOW ---
+        // 1. Recon (Map click) -> 2. Dossier (Education) -> 3. Briefing -> 4. Decoding (Optional) -> 5. Decision Map/Choice
+        
+        function startPhase() {
+            if (state.currentScenario >= scenarios.length) {
+                checkWinLoss(true);
+                return;
+            }
+
+            const scenario = scenarios[state.currentScenario];
+            yearDisplay.innerText = scenario.year;
+            
+            // Start met Reconnaissance (Hotspot op map)
+            state.phase = 'recon';
+            clearMapSelection();
+            
+            // Oplichten van meerdere landen binnen dezelfde regio tegelijkertijd
+            const hotspotRegions = document.querySelectorAll(`[data-region="${scenario.hotspot}"]`);
+            hotspotRegions.forEach(r => r.classList.add('hotspot'));
+
+            mapBanner.classList.remove('opacity-0', 'pointer-events-none', 'translate-y-16');
+            mapBanner.textContent = "NIEUWE INLICHTINGEN! Klik op de knipperende rode regio op de kaart.";
+            mapStatus.textContent = "VERKENNING VEREIST";
+            mapStatus.className = "text-xs font-mono-military text-rose-500 font-bold animate-pulse";
+            mapInstructionText.textContent = `Doelwit: Analyseer regio voor historische context in ${scenario.year}.`;
+
+            printLine(`\n=== INKOMEND RAPPORT [JAAR ${scenario.year}]: ${scenario.title} ===\nOntvangen signalen uit vijandelijk gebied. Voer verkenning uit via de tactische kaart om het volledige historische dossier te openen.`, "msg-alert", true);
+        }
+
+        function showDossierAndBriefing() {
+            const scenario = scenarios[state.currentScenario];
+            printLine(scenario.dossier, "msg-dossier", false, () => {
+                window.pendingCallback = () => {
+                    setTimeout(() => {
+                        printLine("\n[COMMANDO BRIEFING]\n" + scenario.briefing, "msg-intel", false, () => {
+                            btnContinue.classList.remove('hidden');
+                            btnContinueText.innerText = "BEGRIJPEN & ACTIE ONDERNEMEN";
+                            btnContinue.onclick = () => {
+                                btnContinue.classList.add('hidden');
+                                state.phase = scenario.decoding ? 'decoding' : (scenario.mapInstruction ? 'mapping' : 'choosing');
+                                setupActionPhase();
+                            };
+                        });
+                    }, 500);
+                };
+                if (!isTyping) window.pendingCallback();
+            });
+        }
+
+        function setupActionPhase() {
+            const scenario = scenarios[state.currentScenario];
+            
+            if (state.phase === 'decoding') {
+                printLine("\n[BEVEILIGDE LOKALE COMMUNICATIE]\n" + scenario.decoding.prompt, "msg-alert", false, () => {
+                    inputArea.classList.remove('hidden');
+                    commandInput.value = "";
+                    quickChipsContainer.innerHTML = '<span class="text-xs text-slate-500">Snelcode (educatie modus):</span>';
+                    scenario.decoding.codes.forEach(code => {
+                        const chip = document.createElement('button');
+                        chip.className = 'bg-slate-800 hover:bg-amber-600 text-amber-400 hover:text-white border border-amber-600/50 font-mono-military text-xs px-3 py-1 rounded transition';
+                        chip.innerText = code;
+                        chip.onclick = () => { commandInput.value = code; checkCodeInput(); };
+                        quickChipsContainer.appendChild(chip);
+                    });
+                    setTimeout(() => commandInput.focus(), 100);
+                });
+            } else if (state.phase === 'mapping') {
+                mapBanner.classList.remove('opacity-0', 'pointer-events-none', 'translate-y-16');
+                mapBanner.textContent = scenario.mapInstruction.text;
+                mapStatus.textContent = "ACTIE VEREIST OP KAART";
+                mapStatus.className = "text-xs font-mono-military text-blue-400 font-bold animate-pulse";
+                mapInstructionText.textContent = "Jouw strategische keuze vereist een locatieaanduiding.";
+
+                regions.forEach(r => {
+                    const regionAttr = r.getAttribute('data-region');
+                    if (regionAttr && scenario.mapInstruction.validTargets.includes(regionAttr)) {
+                        r.classList.add('active-target');
+                    }
+                });
+                printLine("\nWACHTEN OP LOCATIE-SELECTIE VIA DE KAART (LINKS)...", "msg-intel", false);
+            } else if (state.phase === 'choosing') {
+                printLine("\n[STRATEGISCH DILEMMA] Wat is uw bevel, Commandant?", "msg-intel", false, () => {
+                    choiceArea.innerHTML = '';
+                    choiceArea.classList.remove('hidden');
+                    scenario.choices.forEach(choice => {
+                        const btn = document.createElement('button');
+                        btn.className = 'w-full text-left bg-slate-800 border-2 border-slate-700 hover:border-amber-500 hover:bg-slate-700 p-4 rounded-lg text-sm font-semibold transition text-slate-100 flex items-center justify-between group';
+                        btn.innerHTML = `<span>${choice.text}</span><svg class="w-5 h-5 text-slate-500 group-hover:text-amber-400 transform group-hover:translate-x-1 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>`;
+                        btn.onclick = () => processChoice(choice);
+                        choiceArea.appendChild(btn);
+                    });
+                });
+            }
+        }
+
+        function checkCodeInput() {
+            const scenario = scenarios[state.currentScenario];
+            const val = commandInput.value.trim().toUpperCase();
+
+            if (scenario.decoding && scenario.decoding.codes.includes(val)) {
+                inputArea.classList.add('hidden');
+                printLine(`\n[CODE GEACCEPTEERD: '${val}']\nOntsleuteling succesvol.`, "msg-success", false, () => {
+                    setTimeout(() => {
+                        state.phase = scenario.mapInstruction ? 'mapping' : 'choosing';
+                        setupActionPhase();
+                    }, 500);
+                });
+            } else {
+                printLine(`\n[FOUTIEVE CODE] Typ exact de gevraagde term om het dossier of bevel te bevestigen.`, "msg-alert", false);
+            }
+        }
+
+        function handleMapClick(regionId) {
+            const scenario = scenarios[state.currentScenario];
+
+            if (state.phase === 'recon' && regionId === scenario.hotspot) {
+                clearMapSelection();
+                printLine(`\n[LOCATIE BEVESTIGD] Inlichtingen over dit gebied worden gedecodeerd...`, "msg-success", false, showDossierAndBriefing);
+                return;
+            }
+
+            if (state.phase === 'mapping' && scenario.mapInstruction && scenario.mapInstruction.validTargets.includes(regionId)) {
+                const choice = scenario.choices.find(c => c.targetId === regionId);
+                if (choice) {
+                    clearMapSelection();
+                    printLine(`\n[DOELWIT GESELECTEERD] Voer uit: ${choice.text}`, "msg-success", false, () => {
+                        setTimeout(() => processChoice(choice), 600);
+                    });
+                }
+                return;
+            }
+        }
+
+        function clearMapSelection() {
+            mapBanner.classList.add('opacity-0', 'pointer-events-none', 'translate-y-16');
+            mapStatus.textContent = "STANDBY";
+            mapStatus.className = "text-xs font-mono-military text-slate-500";
+            mapInstructionText.textContent = "Wacht op instructies van de inlichtingendienst.";
+            
+            if (regions) {
+                regions.forEach(r => {
+                    r.classList.remove('active-target', 'hotspot');
+                });
+            }
+        }
+
+        function processChoice(choice) {
+            choiceArea.classList.add('hidden');
+            inputArea.classList.add('hidden');
+
+            state.cohesion += choice.hiddenEffect.c;
+            state.logistics += choice.hiddenEffect.l;
+            state.morale += choice.hiddenEffect.m;
+            updateMeters();
+
+            // Split debrief into consequence and historical reality
+            const parts = choice.debrief.split("HISTORISCHE REALITEIT:");
+            const consequence = parts[0];
+            const history = "HISTORISCHE REALITEIT:" + (parts[1] || "");
+
+            printLine("\n=== GEALLIEERDE GEVOLGEN ===\n" + consequence, "msg-intel", true, () => {
+                window.pendingCallback = () => {
+                    setTimeout(() => {
+                        printLine("\n" + history, "msg-history", false, () => {
+                            btnContinue.classList.remove('hidden');
+                            btnContinueText.innerText = "VOLGENDE HISTORISCHE FASE NAAR " + (scenarios[state.currentScenario + 1] ? scenarios[state.currentScenario + 1].year : "HET EINDE");
+                            btnContinue.onclick = () => {
+                                btnContinue.classList.add('hidden');
+                                if (!checkWinLoss(false)) {
+                                    state.currentScenario++;
+                                    startPhase();
+                                }
+                            };
+                        });
+                    }, 500);
+                }
+                if(!isTyping) window.pendingCallback();
+            });
+        }
+
+        function checkWinLoss(isEndOfGame) {
+            let gameOver = false;
+            let title = "", reason = "";
+
+            if (state.cohesion <= 0) {
+                gameOver = true; title = "COHESIE GEBROKEN (0%)";
+                reason = "De Sovjet-Unie voelt zich verraden en sluit een nieuwe overeenkomst met nazi-Duitsland. De Westerse geallieerden worden van het vasteland verdreven.";
+            } else if (state.logistics <= 0) {
+                gameOver = true; title = "LOGISTIEKE INEENSTORTING (0%)";
+                reason = "Uw legers zijn door munitie, brandstof en voedsel heen. Het offensief komt tot stilstand en de as-mogendheden nemen de controle terug.";
+            } else if (state.morale <= 0) {
+                gameOver = true; title = "THUISFRONT IN OPSTAND (0%)";
+                reason = "Het publiek accepteert de zinloze verliezen en ontberingen niet meer. Politieke revoluties dwingen u om vrede te sluiten met Hitler.";
+            } else if (state.cohesion >= 100) {
+                gameOver = true; title = "KOUDE OORLOG GEËSCALEERD (100%)";
+                reason = "U heeft volledig toegegeven aan Stalin om de vrede te bewaren, waardoor de USSR direct na de oorlog ongeremd West-Europa binnentrekt.";
+            }
+
+            if (gameOver) {
+                printLine(`\n====================================\nGAME OVER: ${title}\n====================================\n${reason}\n\nHistorische lessen vereisen inzicht en balans. Probeer het opnieuw.`, "msg-alert", true, () => {
+                    btnContinue.classList.remove('hidden');
+                    btnContinueText.innerText = "SIMULATIE OPNIEUW STARTEN";
+                    btnContinue.onclick = () => location.reload();
+                });
+                return true;
+            }
+
+            if (isEndOfGame) {
+                printLine(`\n====================================\nVICTORY IN EUROPE (V-E DAY)\n====================================\n\nMei 1945. Duitsland capituleert. U heeft in deze simulatie met succes de logistiek, de politiek en de bevolking in balans weten te houden in de moeilijkste jaren uit de menselijke geschiedenis.\n\nEINDSTATUS:\n- Cohesie: ${state.cohesion}%\n- Logistiek: ${state.logistics}%\n- Moraal: ${state.morale}%\n\nGefeliciteerd met het voltooien van deze strategische geschiedenisles!`, "msg-success", true);
+                return true;
+            }
+            return false;
+        }
+
+        window.onload = initGame;
+    </script>
+</body>
+</html>
