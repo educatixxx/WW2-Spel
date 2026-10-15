@@ -20,6 +20,31 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body class="h-full text-slate-100 flex flex-col justify-between overflow-hidden">
+    <!-- VOEG DIT TOE DIRECT ONDER DE <body> TAG -->
+    <div id="intro-modal-overlay">
+      <div class="modal-card" id="modal-step-1">
+        <div class="telegram-header">
+          <strong>[TELEGRAM - HOOFDKWARTIER 1940]</strong><br>
+          Stap in de schoenen van een besluitvormer tijdens de Tweede Wereldoorlog. Jouw keuzes bepalen de afloop van historische situaties.
+        </div>
+        <button class="btn-primary-next" onclick="goToStep(2)">Volgende: Bekijk Spelscherm &rarr;</button>
+      </div>
+
+      <div class="modal-card" id="modal-step-2" style="display:none;">
+        <h3>Hoe werkt het spel?</h3>
+        <div class="ui-indicator">&bull; <strong>Dilemma:</strong> Elke ronde krijg je een historisch vraagstuk.</div>
+        <div class="ui-indicator">&bull; <strong>Keuzeknoppen:</strong> Bepaal welke actie je onderneemt.</div>
+        <div class="ui-indicator">&bull; <strong>Score/Voortgang:</strong> Zie direct de impact van jouw besluit.</div>
+        <button class="btn-primary-next" onclick="goToStep(3)">Volgende: Doe een Proefstap &rarr;</button>
+      </div>
+
+      <div class="modal-card" id="modal-step-3" style="display:none;">
+        <h3>Proefstap (Oefening)</h3>
+        <p><em>Proefdilemma:</em> Druk op een keuze om te zien hoe de feedback verschijnt.</p>
+        <button class="btn-primary-next" onclick="closeIntroModal()">Start het Echte Spel!</button>
+      </div>
+    </div>
+
     <header class="bg-slate-900/90 border-b border-slate-800 p-4 backdrop-blur-md shadow-lg z-20 flex-shrink-0">
         <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
            
