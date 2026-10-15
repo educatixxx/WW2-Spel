@@ -20,7 +20,7 @@ let typeInterval = null;
 const TYPE_SPEED = 12;
 let cutsceneInterval = null;
 let currentCallback = null; 
-let isCutsceneEnding = false; // NIEUW: Voorkomt dubbel klikken op "Naar Opperbevel"
+let isCutsceneEnding = false;
 
 let state = {
     cohesion: 50, logistics: 50, morale: 50,
@@ -95,7 +95,6 @@ async function initGame() {
     startPhase();
 }
 
-// Modal functies (Versie B Introductie)
 function goToStep(stepNumber) {
     document.getElementById('modal-step-1').style.display = 'none';
     document.getElementById('modal-step-2').style.display = 'none';
@@ -143,6 +142,7 @@ async function loadRealMap() {
         root.innerHTML = '<div class="flex items-center justify-center h-full text-rose-500">Fout bij laden satellietdata.</div>';
     }
 }
+
 function getRegionId(countryName) {
     const map = {
         "England": "region-uk", "United Kingdom": "region-uk", "Ireland": "region-uk", "France": "region-france", "Belgium": "region-france", "Netherlands": "region-france", "Luxembourg": "region-france",
@@ -151,6 +151,7 @@ function getRegionId(countryName) {
     };
     return map[countryName] || "region-neutral";
 }
+
 function updateMeters() {
     state.cohesion = Math.max(0, Math.min(100, state.cohesion)); state.logistics = Math.max(0, Math.min(100, state.logistics)); state.morale = Math.max(0, Math.min(100, state.morale));
     document.getElementById('meter-cohesion').style.width = state.cohesion + '%'; document.getElementById('meter-logistics').style.width = state.logistics + '%'; document.getElementById('meter-morale').style.width = state.morale + '%';
@@ -267,7 +268,7 @@ function setupActionPhase() {
 }
 
 function checkCodeInput() {
-    if (isTyping) return; // NIEUW: Blokkeer invoer tijdens het typen
+    if (isTyping) return;
     const scenario = scenarios[state.currentScenario]; const val = commandInput.value.trim().toUpperCase();
     if (scenario.decoding && scenario.decoding.codes.includes(val)) {
         inputArea.classList.add('hidden'); printLine(`\n[CODE GEACCEPTEERD: '${val}']\nOntsleuteling succesvol.`, "msg-success", false, () => { setTimeout(() => { state.phase = scenario.mapInstruction ? 'mapping' : 'choosing'; setupActionPhase(); }, 400); });
@@ -275,11 +276,11 @@ function checkCodeInput() {
 }
 
 function handleMapClick(regionId) {
-    if (isTyping) return; // NIEUW: Blokkeer map klikken tijdens het typen! Dit voorkomt dat het spel gereset of overschreven wordt.
+    if (isTyping) return;
     
     const scenario = scenarios[state.currentScenario];
     if (state.phase === 'recon' && regionId === scenario.hotspot) { 
-        state.phase = 'transition'; // NIEUW: Verander status direct zodat dubbel klikken genegeerd wordt!
+        state.phase = 'transition';
         clearMapSelection(); 
         printLine(`\n[LOCATIE BEVESTIGD] Onderscheppen van veldcommunicatie...`, "msg-success", false, playCutscene); 
         return; 
@@ -287,7 +288,7 @@ function handleMapClick(regionId) {
     if (state.phase === 'mapping' && scenario.mapInstruction && scenario.mapInstruction.validTargets.includes(regionId)) { 
         const choice = scenario.choices.find(c => c.targetId === regionId); 
         if (choice) { 
-            state.phase = 'transition'; // NIEUW: Voorkomt ook hier dubbele acties
+            state.phase = 'transition';
             clearMapSelection(); 
             triggerActionCutscene(choice); 
         } 
@@ -304,7 +305,7 @@ function playCutscene() {
 }
 
 function endCutscene() {
-    if (isCutsceneEnding) return; // NIEUW: Voorkomt dubbel uitvoeren als je snel achter elkaar klikt.
+    if (isCutsceneEnding) return;
     isCutsceneEnding = true;
     
     const overlay = document.getElementById('cutscene-overlay'); clearInterval(cutsceneInterval); overlay.classList.remove('opacity-100'); overlay.classList.add('opacity-0');
@@ -312,7 +313,7 @@ function endCutscene() {
         overlay.classList.add('hidden'); 
         overlay.classList.remove('flex'); 
         showDossierAndBriefing(); 
-        isCutsceneEnding = false; // Reset de knop beveiliging
+        isCutsceneEnding = false;
     }, 500);
 }
 
