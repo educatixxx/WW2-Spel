@@ -17,10 +17,34 @@
             }
         }
     </script>
-    <!-- Koppel hier het CSS bestand -->
     <link rel="stylesheet" href="styles.css">
 </head>
 <body class="h-full text-slate-100 flex flex-col justify-between overflow-hidden">
+
+    <!-- Versie B Onboarding Modal Overlay -->
+    <div id="intro-modal-overlay">
+        <div class="modal-card" id="modal-step-1">
+            <div class="telegram-header">
+                <strong>[TELEGRAM - HOOFDKWARTIER 1940]</strong><br>
+                Stap in de schoenen van een besluitvormer tijdens de Tweede Wereldoorlog. Jouw keuzes bepalen de afloop van historische situaties.
+            </div>
+            <button class="btn-primary-next" onclick="goToStep(2)">Volgende: Bekijk Spelscherm →</button>
+        </div>
+
+        <div class="modal-card" id="modal-step-2" style="display:none;">
+            <h3 class="text-xl font-bold mb-3">Hoe werkt het spel?</h3>
+            <div class="ui-indicator">• <strong>Dilemma:</strong> Elke ronde krijg je een historisch vraagstuk.</div>
+            <div class="ui-indicator">• <strong>Keuzeknoppen:</strong> Bepaal welke actie je onderneemt.</div>
+            <div class="ui-indicator">• <strong>Score/Voortgang:</strong> Zie direct de impact van jouw besluit.</div>
+            <button class="btn-primary-next mt-4" onclick="goToStep(3)">Volgende: Doe een Proefstap →</button>
+        </div>
+
+        <div class="modal-card" id="modal-step-3" style="display:none;">
+            <h3 class="text-xl font-bold mb-2">Proefstap (Oefening)</h3>
+            <p class="mb-4"><em>Proefdilemma:</em> Druk op een keuze om te zien hoe de feedback verschijnt.</p>
+            <button class="btn-primary-next" onclick="closeIntroModal()">Start het Echte Spel!</button>
+        </div>
+    </div>
 
     <header class="bg-slate-900/90 border-b border-slate-800 p-4 backdrop-blur-md shadow-lg z-20 flex-shrink-0">
         <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
@@ -166,7 +190,6 @@
         <div class="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-black/30"></div>
         
         <div class="relative z-10 flex flex-col justify-center items-center h-full p-4 md:p-8 max-w-4xl mx-auto w-full">
-            <!-- Transparante donkere leeskaart voor optimale leesbaarheid -->
             <div class="bg-slate-950/85 backdrop-blur-md p-6 md:p-8 rounded-2xl border border-amber-500/40 w-full shadow-2xl flex flex-col my-auto max-h-[85vh]">
                 <div class="flex items-center justify-between border-b border-amber-500/30 pb-3 mb-4">
                     <div class="flex items-center gap-3">
@@ -176,7 +199,6 @@
                     <span class="text-xs text-amber-500/70 font-mono-military uppercase tracking-widest">Persoonlijk Document</span>
                 </div>
                 
-                <!-- Leesbaar tekstgedeelte met behoud van alle spaties en enters -->
                 <div class="overflow-y-auto flex-1 pr-2 mb-4 my-2">
                     <div id="cutscene-text" class="vh-letter font-typewriter text-amber-100 text-lg md:text-2xl leading-relaxed"></div>
                 </div>
@@ -210,7 +232,6 @@
         </div>
     </div>
 
-    <!-- Koppel hier het JavaScript bestand -->
     <script src="app.js"></script>
 </body>
 </html>

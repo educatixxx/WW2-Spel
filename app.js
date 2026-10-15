@@ -1,3 +1,20 @@
+/* Onboarding Modal Besturing (Versie B) */
+function goToStep(stepNumber) {
+    document.getElementById('modal-step-1').style.display = 'none';
+    document.getElementById('modal-step-2').style.display = 'none';
+    document.getElementById('modal-step-3').style.display = 'none';
+
+    document.getElementById('modal-step-' + stepNumber).style.display = 'block';
+}
+
+function closeIntroModal() {
+    var overlay = document.getElementById('intro-modal-overlay');
+    if (overlay) {
+        overlay.style.display = 'none';
+    }
+}
+
+/* Core Game Elements */
 const terminalContent = document.getElementById('terminal-content');
 const inputArea = document.getElementById('input-area');
 const commandInput = document.getElementById('command-input');

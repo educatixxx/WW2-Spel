@@ -4,6 +4,51 @@ body { font-family: 'Inter', sans-serif; }
 .font-mono-military { font-family: 'JetBrains Mono', monospace; }
 .font-typewriter { font-family: 'Special Elite', 'Courier New', monospace; }
 
+/* Versie B Onboarding Modal Styling */
+#intro-modal-overlay {
+    position: fixed;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(15, 23, 42, 0.92);
+    z-index: 9999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-family: Arial, sans-serif;
+}
+.modal-card {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 30px;
+    max-width: 650px;
+    width: 90%;
+    box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);
+    color: #1e293b;
+}
+.telegram-header {
+    background: #fef3c7;
+    border: 2px dashed #d97706;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-family: monospace;
+}
+.ui-indicator {
+    background: #eff6ff;
+    border-left: 4px solid #2563eb;
+    padding: 10px;
+    margin: 8px 0;
+}
+.btn-primary-next {
+    background-color: #2563eb;
+    color: white;
+    padding: 12px 24px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 16px;
+}
+
 /* Realistische Map Styling (D3) */
 .map-region {
     fill: #1e293b;
