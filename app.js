@@ -19,7 +19,8 @@ let currentMsgClass = "";
 let typeInterval = null;
 const TYPE_SPEED = 12;
 let cutsceneInterval = null;
-let currentCallback = null; // NIEUWE VARIABELE VOOR CORRECTE CALLBACK HANDELING
+let currentCallback = null; 
+let isCutsceneEnding = false; // NIEUW: Voorkomt dubbel klikken op "Naar Opperbevel"
 
 let state = {
     cohesion: 50, logistics: 50, morale: 50,
@@ -162,7 +163,6 @@ function printLine(text, msgClass = "msg-intel", clear = false, callback = null)
     currentFullText = text;
     currentMsgClass = msgClass;
     
-    // Oplossing voor de bug: Sla de callback globaal op in plaats van `window.pendingCallback` te misbruiken.
     currentCallback = callback;
    
     const p = document.createElement('div');
@@ -196,7 +196,6 @@ function finishTyping() {
     btnSkipTyping.classList.add('hidden');
     terminalContent.scrollTop = terminalContent.scrollHeight;
     
-    // Oplossing: Haal de opgeslagen callback op en reset deze onmiddellijk om dubbele uitvoer te voorkomen.
     let cb = currentCallback;
     currentCallback = null;
     if (cb) {
@@ -223,7 +222,6 @@ function startPhase() {
 function showDossierAndBriefing() {
     const scenario = scenarios[state.currentScenario];
     
-    // Oplossing: Geneste callbacks gebruiken zonder window.pendingCallback constructies.
     printLine(scenario.dossier, "msg-dossier", false, () => {
         setTimeout(() => {
             printLine("\n[COMMANDO BRIEFING]\n" + scenario.briefing, "msg-intel", false, () => {
@@ -267,17 +265,36 @@ function setupActionPhase() {
         });
     }
 }
+
 function checkCodeInput() {
+    if (isTyping) return; // NIEUW: Blokkeer invoer tijdens het typen
     const scenario = scenarios[state.currentScenario]; const val = commandInput.value.trim().toUpperCase();
     if (scenario.decoding && scenario.decoding.codes.includes(val)) {
         inputArea.classList.add('hidden'); printLine(`\n[CODE GEACCEPTEERD: '${val}']\nOntsleuteling succesvol.`, "msg-success", false, () => { setTimeout(() => { state.phase = scenario.mapInstruction ? 'mapping' : 'choosing'; setupActionPhase(); }, 400); });
     } else { printLine(`\n[FOUTIEVE CODE] Typ exact de gevraagde term om het dossier of bevel te bevestigen.`, "msg-alert", false); }
 }
+
 function handleMapClick(regionId) {
+    if (isTyping) return; // NIEUW: Blokkeer map klikken tijdens het typen! Dit voorkomt dat het spel gereset of overschreven wordt.
+    
     const scenario = scenarios[state.currentScenario];
-    if (state.phase === 'recon' && regionId === scenario.hotspot) { clearMapSelection(); printLine(`\n[LOCATIE BEVESTIGD] Onderscheppen van veldcommunicatie...`, "msg-success", false, playCutscene); return; }
-    if (state.phase === 'mapping' && scenario.mapInstruction && scenario.mapInstruction.validTargets.includes(regionId)) { const choice = scenario.choices.find(c => c.targetId === regionId); if (choice) { clearMapSelection(); triggerActionCutscene(choice); } return; }
+    if (state.phase === 'recon' && regionId === scenario.hotspot) { 
+        state.phase = 'transition'; // NIEUW: Verander status direct zodat dubbel klikken genegeerd wordt!
+        clearMapSelection(); 
+        printLine(`\n[LOCATIE BEVESTIGD] Onderscheppen van veldcommunicatie...`, "msg-success", false, playCutscene); 
+        return; 
+    }
+    if (state.phase === 'mapping' && scenario.mapInstruction && scenario.mapInstruction.validTargets.includes(regionId)) { 
+        const choice = scenario.choices.find(c => c.targetId === regionId); 
+        if (choice) { 
+            state.phase = 'transition'; // NIEUW: Voorkomt ook hier dubbele acties
+            clearMapSelection(); 
+            triggerActionCutscene(choice); 
+        } 
+        return; 
+    }
 }
+
 function playCutscene() {
     const scenario = scenarios[state.currentScenario]; const overlay = document.getElementById('cutscene-overlay'); const visual = document.getElementById('cutscene-visual'); const dateEl = document.getElementById('cutscene-date'); const textEl = document.getElementById('cutscene-text');
     visual.style.backgroundImage = `url('${scenario.cutscene.bg}')`; dateEl.innerText = scenario.cutscene.date; textEl.textContent = "";
@@ -285,10 +302,20 @@ function playCutscene() {
     let i = 0; const letter = scenario.cutscene.text; clearInterval(cutsceneInterval);
     setTimeout(() => { cutsceneInterval = setInterval(() => { if (i < letter.length) { textEl.textContent += letter.charAt(i); i++; } else { clearInterval(cutsceneInterval); } }, 25); }, 400);
 }
+
 function endCutscene() {
+    if (isCutsceneEnding) return; // NIEUW: Voorkomt dubbel uitvoeren als je snel achter elkaar klikt.
+    isCutsceneEnding = true;
+    
     const overlay = document.getElementById('cutscene-overlay'); clearInterval(cutsceneInterval); overlay.classList.remove('opacity-100'); overlay.classList.add('opacity-0');
-    setTimeout(() => { overlay.classList.add('hidden'); overlay.classList.remove('flex'); showDossierAndBriefing(); }, 500);
+    setTimeout(() => { 
+        overlay.classList.add('hidden'); 
+        overlay.classList.remove('flex'); 
+        showDossierAndBriefing(); 
+        isCutsceneEnding = false; // Reset de knop beveiliging
+    }, 500);
 }
+
 function triggerActionCutscene(choice) {
     choiceArea.classList.add('hidden'); inputArea.classList.add('hidden');
     const actionOverlay = document.getElementById('action-cutscene-overlay'); const actionBg = document.getElementById('action-cutscene-bg'); const actionTitle = document.getElementById('action-cutscene-title'); const actionDesc = document.getElementById('action-cutscene-desc'); const progressBar = document.getElementById('action-progress');
@@ -297,15 +324,16 @@ function triggerActionCutscene(choice) {
     setTimeout(() => { actionOverlay.classList.remove('opacity-0'); actionOverlay.classList.add('opacity-100'); progressBar.style.width = '100%'; }, 50);
     setTimeout(() => { actionOverlay.classList.remove('opacity-100'); actionOverlay.classList.add('opacity-0'); setTimeout(() => { actionOverlay.classList.add('hidden'); actionOverlay.classList.remove('flex'); processChoice(choice); }, 500); }, 3000);
 }
+
 function clearMapSelection() {
     mapBanner.classList.add('opacity-0', 'pointer-events-none', 'translate-y-16'); mapStatus.textContent = "STANDBY"; mapStatus.className = "text-xs font-mono-military text-slate-500"; mapInstructionText.textContent = "Wacht op instructies van de inlichtingendienst.";
     if (regions) { regions.forEach(r => { r.classList.remove('active-target', 'hotspot'); }); }
 }
+
 function processChoice(choice) {
     state.cohesion += choice.hiddenEffect.c; state.logistics += choice.hiddenEffect.l; state.morale += choice.hiddenEffect.m; updateMeters();
     const parts = choice.debrief.split("HISTORISCHE REALITEIT:"); const consequence = parts[0]; const history = "HISTORISCHE REALITEIT:" + (parts[1] || "");
     
-    // Oplossing: Correcte nesting van de callbacks in processChoice
     printLine("\n=== GEALLIEERDE GEVOLGEN ===\n" + consequence, "msg-intel", true, () => {
         setTimeout(() => {
             printLine("\n" + history, "msg-history", false, () => {
@@ -322,6 +350,7 @@ function processChoice(choice) {
         }, 400);
     });
 }
+
 function checkWinLoss(isEndOfGame) {
     let gameOver = false; let title = "", reason = "";
     if (state.cohesion <= 0) { gameOver = true; title = "COHESIE GEBROKEN (0%)"; reason = "De Sovjet-Unie voelt zich verraden en sluit een nieuwe overeenkomst met nazi-Duitsland. De Westerse geallieerden worden van het vasteland verdreven."; }
